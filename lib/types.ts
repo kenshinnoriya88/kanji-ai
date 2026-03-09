@@ -21,5 +21,8 @@ export type Restaurant = {
   event_id: string;
   name: string;
   votes: number;
+  url: string | null;
+  image_url: string | null;
+  description: string | null;
   created_at: string;
 };

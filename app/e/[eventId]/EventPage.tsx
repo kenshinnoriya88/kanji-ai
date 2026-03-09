@@ -120,27 +120,39 @@ export default function EventPage({ eventId }: { eventId: string }) {
     if (participants.length === 0) return;
     setLoadingPlace(true);
     const stations = participants.map((p) => p.station);
-    const res = await fetch("/api/meeting-place", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stations }),
-    });
-    const data = await res.json();
-    setMeetingPlace(data);
-    setLoadingPlace(false);
+    try {
+      const res = await fetch("/api/meeting-place", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stations }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setMeetingPlace(data);
+    } catch {
+      alert("集合場所の取得に失敗しました。しばらく待ってから再試行してください。");
+    } finally {
+      setLoadingPlace(false);
+    }
   }
 
   async function handleGenerateRestaurants() {
     if (!meetingPlace) return;
     setLoadingRests(true);
-    const res = await fetch("/api/restaurants/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ area: meetingPlace.area, eventId }),
-    });
-    const data = await res.json();
-    if (data.restaurants) setRestaurants(data.restaurants);
-    setLoadingRests(false);
+    try {
+      const res = await fetch("/api/restaurants/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ area: meetingPlace.area, eventId }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (data.restaurants) setRestaurants(data.restaurants);
+    } catch {
+      alert("お店の取得に失敗しました。しばらく待ってから再試行してください。");
+    } finally {
+      setLoadingRests(false);
+    }
   }
 
   async function handleVote(restaurantId: string) {
@@ -376,32 +388,72 @@ export default function EventPage({ eventId }: { eventId: string }) {
               お店候補 {restaurants.length > 0 && `（${meetingPlace.area}）`}
             </h2>
             {restaurants.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {restaurants.map((r, i) => (
                   <div
                     key={r.id}
-                    className={`flex items-center justify-between p-4 rounded-xl border ${
+                    className={`rounded-2xl overflow-hidden border shadow-sm ${
                       i === 0 && r.votes > 0
-                        ? "border-yellow-300 bg-yellow-50"
-                        : "border-gray-200 bg-gray-50"
+                        ? "border-yellow-300"
+                        : "border-gray-200"
                     }`}
                   >
-                    <div>
-                      {i === 0 && r.votes > 0 && (
-                        <span className="text-xs font-bold text-yellow-600 block mb-0.5">
-                          現在1位
-                        </span>
+                    {/* 店舗画像 */}
+                    {r.image_url ? (
+                      <div className="relative h-44 bg-gray-100">
+                        <img
+                          src={r.image_url}
+                          alt={r.name}
+                          className="w-full h-full object-cover"
+                        />
+                        {i === 0 && r.votes > 0 && (
+                          <span className="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow">
+                            👑 現在1位
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      i === 0 && r.votes > 0 && (
+                        <div className="bg-yellow-50 px-4 pt-3">
+                          <span className="text-xs font-bold text-yellow-600">👑 現在1位</span>
+                        </div>
+                      )
+                    )}
+
+                    {/* 店舗情報 */}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-bold text-gray-900 text-base leading-snug flex-1">
+                          {r.name}
+                        </h3>
+                        {r.url && (
+                          <a
+                            href={r.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 text-xs text-indigo-600 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-50 transition-colors"
+                          >
+                            詳細 ↗
+                          </a>
+                        )}
+                      </div>
+                      {r.description && (
+                        <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                          {r.description}
+                        </p>
                       )}
-                      <p className="font-semibold text-gray-800">{r.name}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-gray-500 text-sm">{r.votes}票</span>
-                      <button
-                        onClick={() => handleVote(r.id)}
-                        className="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors"
-                      >
-                        👍 投票
-                      </button>
+                      {/* 投票 */}
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                        <span className="text-sm text-gray-500 font-medium">
+                          {r.votes}票
+                        </span>
+                        <button
+                          onClick={() => handleVote(r.id)}
+                          className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+                        >
+                          👍 投票する
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -412,7 +464,7 @@ export default function EventPage({ eventId }: { eventId: string }) {
                 disabled={loadingRests}
                 className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
               >
-                {loadingRests ? "AIがお店を探し中..." : "AIにお店を提案してもらう"}
+                {loadingRests ? "お店を検索中..." : "ホットペッパーでお店を探す"}
               </button>
             )}
           </section>
